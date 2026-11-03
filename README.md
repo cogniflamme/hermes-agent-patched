@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/banner.png" alt="hermes-agent-patched: unofficial security-patched build" width="100%"></p>
+
 # hermes-agent-patched
 
 **Unofficial.** The official [Hermes Agent](https://github.com/NousResearch/hermes-agent)
@@ -113,4 +115,5 @@ has or has already fixed.
 
 The scripts and Containerfile here: MIT (LICENSE). The image contains Hermes
 Agent (MIT, © Nous Research), Debian packages and Chromium under their own
-licenses; see NOTICE.
+licenses; see NOTICE. The banner (`assets/banner.png`) carries the Cogniflamme
+Labs logo and is not covered by the MIT license: please do not reuse it.
