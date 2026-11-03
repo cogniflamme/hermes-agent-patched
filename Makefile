@@ -2,7 +2,7 @@
 # ENGINE=docker) and grype.
 SHELL := /bin/bash
 ENGINE ?= podman
-IMAGE  ?= localhost/hermes-hardened:dev
+IMAGE  ?= localhost/hermes-patched:dev
 include upstream.env
 
 build: ## Build the image on the pinned upstream

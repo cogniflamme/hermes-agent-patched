@@ -54,8 +54,8 @@ PY
   check "split kept only page 2"  sh -c "pdftext p2.pdf | grep -q 'page B' && ! pdftext p2.pdf | grep -q 'page A'"
   check "watermark"               $PY $SK/pdf_watermark.py --stamp stamp.pdf -o wm.pdf merged.pdf
   check "stamp on the pages"      sh -c "pdftext wm.pdf | grep -q CONFIDENTIAL"
-  check "metadata set"            $PY $SK/pdf_meta.py --set-meta --title "Hardened test" -o meta.pdf merged.pdf
-  check "metadata read"           sh -c "pdftext meta.pdf | grep -q 'Hardened test'"
+  check "metadata set"            $PY $SK/pdf_meta.py --set-meta --title "Patched test" -o meta.pdf merged.pdf
+  check "metadata read"           sh -c "pdftext meta.pdf | grep -q 'Patched test'"
   check "encrypt (AES-256)"       $PY $SK/pdf_secure.py --encrypt --user-password s3cret -o enc.pdf merged.pdf
   check "wrong password refused"  sh -c "! pdftext enc.pdf nope >/dev/null 2>&1 && pdftext enc.pdf s3cret | grep -q 'page A'"
   check "decrypt"                 $PY $SK/pdf_secure.py --decrypt --password s3cret -o dec.pdf enc.pdf

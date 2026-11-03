@@ -22,7 +22,7 @@ API = f"https://hub.docker.com/v2/repositories/{REPO}/tags"
 
 
 def get(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "hermes-agent-hardened"})
+    req = urllib.request.Request(url, headers={"User-Agent": "hermes-agent-patched"})
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.load(r)
 

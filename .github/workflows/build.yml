@@ -23,10 +23,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  STAGING: ghcr.io/${{ github.repository_owner }}/hermes-agent-hardened
+  STAGING: ghcr.io/${{ github.repository_owner }}/hermes-agent-patched
   # Docker Hub repository; publishing there is skipped until the
   # DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets exist.
-  DOCKERHUB_REPO: ${{ vars.DOCKERHUB_REPO || 'cogniflamme/hermes-agent-hardened' }}
+  DOCKERHUB_REPO: ${{ vars.DOCKERHUB_REPO || 'cogniflamme/hermes-agent-patched' }}
 
 jobs:
   build:
@@ -84,7 +84,7 @@ jobs:
           # PR: load locally. Otherwise: push by digest, untagged, with buildx's
           # SBOM and max provenance attached.
           load: ${{ github.event_name == 'pull_request' }}
-          tags: ${{ github.event_name == 'pull_request' && 'hardened:test' || '' }}
+          tags: ${{ github.event_name == 'pull_request' && 'patched:test' || '' }}
           outputs: ${{ github.event_name != 'pull_request' && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.STAGING) || '' }}
           sbom: ${{ github.event_name != 'pull_request' }}
           provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
@@ -95,7 +95,7 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           if [[ $GITHUB_EVENT_NAME == pull_request ]]; then
-            echo "ref=hardened:test" >> "$GITHUB_OUTPUT"
+            echo "ref=patched:test" >> "$GITHUB_OUTPUT"
           else
             ref="$STAGING@$DIGEST"
             docker pull -q --platform "linux/${{ matrix.arch }}" "$ref"   # test exactly what was pushed
@@ -198,15 +198,15 @@ jobs:
         run: |
           up=${BASE%@*}; up=${up##*:}                       # v0.22.5
           day=$(date -u +%Y%m%d)
-          repos=("ghcr.io/${{ github.repository_owner }}/hermes-agent-hardened")
+          repos=("ghcr.io/${{ github.repository_owner }}/hermes-agent-patched")
           [[ $HUB_ON == true ]] && repos+=("docker.io/$DOCKERHUB_REPO")
           args=()
           for r in "${repos[@]}"; do
-            args+=(-t "$r:$up-hardened.$day" -t "$r:$up-hardened" -t "$r:latest")
+            args+=(-t "$r:$up-patched.$day" -t "$r:$up-patched" -t "$r:latest")
           done
           echo "args=${args[*]}" >> "$GITHUB_OUTPUT"
           echo "repos=${repos[*]}" >> "$GITHUB_OUTPUT"
-          echo "version=$up-hardened.$day" >> "$GITHUB_OUTPUT"
+          echo "version=$up-patched.$day" >> "$GITHUB_OUTPUT"
 
       - id: index
         name: Tag the tested multi-arch index

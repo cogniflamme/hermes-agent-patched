@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # tests/run.sh IMAGE: every check a release must pass, in throwaway containers.
 # ENGINE=docker for CI (default: podman).
+# `check && pass || fail` is deliberate: pass only prints, so fail cannot run after a pass.
+# shellcheck disable=SC2015
 set -euo pipefail
 IMG=${1:?usage: tests/run.sh IMAGE}
 ENGINE=${ENGINE:-podman}

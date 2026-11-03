@@ -69,17 +69,17 @@ def legacy_tools():
     """v0.22.5 and older: one function per action."""
     check("backend is local", browser_backend_name() == "local", browser_backend_name())
     nav = call("navigate", b.browser_navigate, f"{BASE}/page.html")
-    check("title", nav.get("title") == "hardened-e2e", str(nav.get("title")))
+    check("title", nav.get("title") == "patched-e2e", str(nav.get("title")))
 
     check_chrome()
     snap = call("snapshot", b.browser_snapshot).get("snapshot", "")
     box, btn = ref(snap, "textbox", "Name"), ref(snap, "button", "Greet")
     check("snapshot has refs", bool(box and btn), snap[:300])
     if box and btn:
-        call("type", b.browser_type, box, "hardened")
+        call("type", b.browser_type, box, "patched")
         call("click", b.browser_click, btn)
         out = call("read result", b.browser_console, expression="document.getElementById('out').textContent")
-        check("click ran the page's JS", "hello hardened" in json.dumps(out), json.dumps(out)[:300])
+        check("click ran the page's JS", "hello patched" in json.dumps(out), json.dumps(out)[:300])
 
     js = call("console expression", b.browser_console, expression="window.__js_ok")
     check("JS evaluates", "42" in json.dumps(js), json.dumps(js)[:300])
@@ -99,11 +99,11 @@ def legacy_tools():
 
 
 EXEC_CODE = f"""
-# Hardened image browser test
+# Patched image browser test
 new_tab("{BASE}/page.html"); wait_for_load()
 print("TITLE=" + str(js("document.title")))
 print("UA=" + str(js("navigator.userAgent")))
-fill_input("#name", "hardened")
+fill_input("#name", "patched")
 x, y = js("(() => {{ const r = document.getElementById('go').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }})()")
 click_at_xy(x, y)
 print("OUT=" + str(js("document.getElementById('out').textContent")))
@@ -128,10 +128,10 @@ def exec_tool():
         fails.append("browser_exec")
     out = res.get("output", out) if isinstance(res, dict) else out
     # Browser Use marks its tab titles (e.g. a leading emoji): match the end.
-    check("title", re.search(r"^TITLE=.*hardened-e2e$", out, re.M) is not None, out[:300])
+    check("title", re.search(r"^TITLE=.*patched-e2e$", out, re.M) is not None, out[:300])
     m = re.search(r"Chrome/(\d+)\.", out)
     check("Chrome major from the user agent", bool(m) and int(m.group(1)) >= 150, (m and m.group(0)) or out[:200])
-    check("typed + clicked, page JS ran", "OUT=hello hardened" in out, out[:300])
+    check("typed + clicked, page JS ran", "OUT=hello patched" in out, out[:300])
     check("JS evaluates", "JS=42" in out, out[:300])
     check("navigated to page 2", re.search(r"^TITLE2=.*page two$", out, re.M) is not None, out[:300])
     check_chrome()

@@ -1,4 +1,4 @@
-# hermes-agent-hardened: the official Hermes Agent image (Nous Research, MIT)
+# hermes-agent-patched: the official Hermes Agent image (Nous Research, MIT)
 # with security fixes upstream has not shipped yet. Unofficial.
 #
 # Every change is listed in README.md with the advisory it closes, and is
@@ -66,13 +66,13 @@ RUN set -e; for dir in /opt/hermes/tools/chromium-[0-9]*; do \
 # 3. Python packages in Hermes' venv (patches/python-requirements.txt), only
 #    those this Hermes ships (patches/select.py), with the uv Hermes ships;
 #    their old wheels leave Hermes' uv cache.
-COPY patches/python-requirements.txt patches/select.py /tmp/hardened/
+COPY patches/python-requirements.txt patches/select.py /tmp/patched/
 RUN uv=$(find /opt/hermes/tools -name uv -type f -perm -u+x | head -1) && [ -n "$uv" ] \
- && /opt/hermes/.venv/bin/python /tmp/hardened/select.py /tmp/hardened/python-requirements.txt > /tmp/hardened/req.txt \
+ && /opt/hermes/.venv/bin/python /tmp/patched/select.py /tmp/patched/python-requirements.txt > /tmp/patched/req.txt \
  && "$uv" pip install -q --python /opt/hermes/.venv/bin/python --no-deps --no-cache \
-      --require-hashes --only-binary :all: -r /tmp/hardened/req.txt \
- && "$uv" cache clean -q --cache-dir /opt/hermes/uv-cache $(sed -n 's/==.*//p' /tmp/hardened/req.txt) \
- && rm -rf /tmp/hardened
+      --require-hashes --only-binary :all: -r /tmp/patched/req.txt \
+ && "$uv" cache clean -q --cache-dir /opt/hermes/uv-cache $(sed -n 's/==.*//p' /tmp/patched/req.txt) \
+ && rm -rf /tmp/patched
 
 # 4. Docker CLI: Debian's docker-cli 26.1.5 is built with Go 1.24.4 (3
 #    Critical, 33 High in the Go standard library). Docker's own signed
@@ -113,6 +113,6 @@ RUN cd /opt/hermes/plugins/platforms/photon/sidecar \
  && node --input-type=module -e "await import('spectrum-ts')" \
  && npm cache clean --force --loglevel=error
 
-LABEL org.opencontainers.image.title="hermes-agent-hardened" \
+LABEL org.opencontainers.image.title="hermes-agent-patched" \
       org.opencontainers.image.description="Unofficial: Hermes Agent with security fixes not yet upstream" \
       org.opencontainers.image.licenses="MIT"

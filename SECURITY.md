@@ -6,5 +6,5 @@ reporting on this repository: Security → Report a vulnerability.
 
 Vulnerabilities in **Hermes Agent itself** go to Nous Research upstream.
 
-Supported: the newest `vX.Y.Z-hardened` tag. Older dated tags are not
+Supported: the newest `vX.Y.Z-patched` tag. Older dated tags are not
 rebuilt; pull the moving tag or the newest digest.

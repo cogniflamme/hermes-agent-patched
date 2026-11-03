@@ -1,4 +1,4 @@
-# hermes-agent-hardened
+# hermes-agent-patched
 
 **Unofficial.** The official [Hermes Agent](https://github.com/NousResearch/hermes-agent)
 image by Nous Research, rebuilt with security fixes that upstream has not
@@ -6,8 +6,8 @@ shipped yet. Same entrypoint, same volumes, same behaviour; use it exactly like
 `nousresearch/hermes-agent`. Not affiliated with or endorsed by Nous Research.
 
 ```bash
-docker pull ghcr.io/cogniflamme/hermes-agent-hardened:v0.22.5-hardened
-# or docker.io/cogniflamme/hermes-agent-hardened (same digest)
+docker pull ghcr.io/cogniflamme/hermes-agent-patched:v0.22.5-patched
+# or docker.io/cogniflamme/hermes-agent-patched (same digest)
 ```
 
 Pin by digest in production; every build is signed (below).
@@ -30,7 +30,7 @@ Nothing else: no configuration, entrypoint or code changes in Hermes.
 
 ## Result (v0.22.5, grype, 2026-11-03)
 
-| | upstream | hardened |
+| | upstream | patched |
 |---|---|---|
 | exploited in the wild (CISA KEV) | 7 | **0** |
 | Critical / High **with a fix** | 376 / 1,403 | 1 / 1 (both reviewed exceptions, `ci/accepted.toml`) |
@@ -41,17 +41,40 @@ What remains has no fix anywhere yet: mostly Debian packages Debian marks
 Hermes does not use) and Chromium releases Debian has not packaged yet. The
 weekly rebuild takes them as they land.
 
+## Patched, not hardened
+
+The image fixes known vulnerabilities; it does not restrict what Hermes can
+do. That part is how you run it. These settings were tested with this image
+(boot, crash restart, the PDF skill, Chromium and the browser tool, npm/uv
+installs, Matrix) and change nothing Hermes needs: Hermes itself already runs
+as uid 10000, and only its supervisor and setup script run as root.
+
+```bash
+docker run --read-only --tmpfs /run:exec --tmpfs /tmp:exec,size=1g --shm-size 1g \
+  --security-opt no-new-privileges \
+  --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER \
+  --cap-add KILL --cap-add SETUID --cap-add SETGID \
+  -v hermes-data:/opt/data ghcr.io/cogniflamme/hermes-agent-patched:latest gateway run
+```
+
+Docker's `--tmpfs` defaults to `noexec` and 64 MB, which s6 (it runs scripts
+from `/run`) and Chromium do not survive, hence `exec` and the size. Tested
+with Podman, where `--read-only` already mounts `/run` and `/tmp`; Quadlet:
+`ReadOnly=true`, `NoNewPrivileges=true`, `DropCapability=ALL`,
+`AddCapability=CHOWN DAC_OVERRIDE FOWNER KILL SETUID SETGID`. Only
+`/opt/data` (and any volume you add) stays writable.
+
 ## Verify an image
 
 ```bash
 # Signature: built by this repository's workflow, on main
-cosign verify ghcr.io/cogniflamme/hermes-agent-hardened@sha256:<digest> \
+cosign verify ghcr.io/cogniflamme/hermes-agent-patched@sha256:<digest> \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-identity-regexp '^https://github.com/cogniflamme/hermes-agent-hardened/\.github/workflows/build\.yml@refs/heads/main$'
+  --certificate-identity-regexp '^https://github.com/cogniflamme/hermes-agent-patched/\.github/workflows/build\.yml@refs/heads/main$'
 
 # Build provenance (SLSA) and SBOM
-gh attestation verify oci://ghcr.io/cogniflamme/hermes-agent-hardened@sha256:<digest> \
-  --repo cogniflamme/hermes-agent-hardened
+gh attestation verify oci://ghcr.io/cogniflamme/hermes-agent-patched@sha256:<digest> \
+  --repo cogniflamme/hermes-agent-patched
 cosign verify-attestation --type spdxjson ... (same identity flags as above)
 ```
 
@@ -68,7 +91,7 @@ cosign verify-attestation --type spdxjson ... (same identity flags as above)
   finding that has a fix, unless `ci/accepted.toml` lists it with a reason
   and an expiry date.
 - **Only if every architecture passes** does `publish` tag the multi-arch
-  index (`vX.Y.Z-hardened.YYYYMMDD`, `vX.Y.Z-hardened`, `latest`), sign it
+  index (`vX.Y.Z-patched.YYYYMMDD`, `vX.Y.Z-patched`, `latest`), sign it
   with cosign (keyless, Sigstore) and attach an SPDX SBOM and SLSA build
   provenance.
 - **Upstream releases**: a daily job opens a PR moving `upstream.env` to the

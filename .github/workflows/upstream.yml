@@ -58,7 +58,7 @@ jobs:
           - drop any patch in the Containerfile/README that $tag fixes upstream
             (the gate run shows what is still found without it).
 
-          Merging publishes \`$tag-hardened\`.
+          Merging publishes \`$tag-patched\`.
           BODY
           )"
           gh workflow run build.yml --ref "$branch"
