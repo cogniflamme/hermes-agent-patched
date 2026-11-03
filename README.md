@@ -60,7 +60,10 @@ cosign verify-attestation --type spdxjson ... (same identity flags as above)
 - **Every push, PR, weekly (Monday) and on demand**, for amd64 and arm64 on
   native runners: build → push the untagged digest → pull it back →
   `tests/run.sh` (versions, tools, boot, the browser tool end to end against
-  a local page) → grype → `ci/gate.py`.
+  a local page, and `tests/functional.sh`: the code paths that use the
+  updated packages, i.e. Hermes' PDF skill on pypdf, brotli responses through
+  httpx/urllib3, google-auth on pyasn1, tornado, Chromium on real sites,
+  npm/npx) → grype → `ci/gate.py`.
 - **The gate fails** on any CISA KEV finding, and on any Critical/High
   finding that has a fix, unless `ci/accepted.toml` lists it with a reason
   and an expiry date.

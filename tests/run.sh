@@ -71,4 +71,8 @@ podman run --rm -v "$T":/t:$VOL --entrypoint sh "$IMG" -c '
   sleep 1; cd /opt/hermes; timeout 300 /opt/hermes/.venv/bin/python /t/browser_e2e.py' \
   && pass "browser tool" || fail "browser tool"
 
+echo "== functional (the code paths that use the updated packages)"
+podman run --rm -v "$T":/t:$VOL --entrypoint sh "$IMG" /t/functional.sh \
+  && pass "PDF skill, brotli, google-auth, tornado, Chromium, npm" || fail "functional"
+
 exit $rc
