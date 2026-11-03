@@ -39,8 +39,10 @@ retry() {   # retry CMD...: network checks get three tries
   for i in 1 2 3; do "$@" && return 0; sleep $((i * 5)); done; return 1
 }
 
-echo "-- pypdf $($PY -c 'import pypdf; print(pypdf.__version__)'): the PDF skill"
-if [ -d "$SK" ]; then
+echo "-- pypdf $($PY -c 'import pypdf; print(pypdf.__version__)' 2>/dev/null || echo absent): the PDF skill"
+if ! $PY -c 'import pypdf' 2>/dev/null; then
+  echo "  skip this Hermes release does not ship pypdf (nothing patched to test)"
+elif [ -d "$SK" ]; then
   $PY - <<'PY'
 from reportlab.pdfgen import canvas
 for name, text in [("a.pdf", "Agent page A"), ("b.pdf", "Agent page B"), ("stamp.pdf", "CONFIDENTIAL")]:

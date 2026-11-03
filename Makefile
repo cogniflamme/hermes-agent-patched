@@ -6,7 +6,7 @@ IMAGE  ?= localhost/hermes-patched:dev
 include upstream.env
 
 build: ## Build the image on the pinned upstream
-	$(ENGINE) build --pull=missing --build-arg BASE=$(BASE) -t $(IMAGE) .
+	$(ENGINE) build --pull=missing -f Containerfile --build-arg BASE=$(BASE) -t $(IMAGE) .
 
 test: ## Versions, tools, boot, browser end to end
 	ENGINE=$(ENGINE) tests/run.sh $(IMAGE)

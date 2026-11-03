@@ -75,6 +75,7 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
+          file: Containerfile              # buildx looks for Dockerfile by default
           platforms: linux/${{ matrix.arch }}
           pull: true
           no-cache: ${{ github.event_name == 'schedule' }}   # weekly: fresh apt, nothing cached
@@ -204,9 +205,11 @@ jobs:
           for r in "${repos[@]}"; do
             args+=(-t "$r:$up-patched.$day" -t "$r:$up-patched" -t "$r:latest")
           done
-          echo "args=${args[*]}" >> "$GITHUB_OUTPUT"
-          echo "repos=${repos[*]}" >> "$GITHUB_OUTPUT"
-          echo "version=$up-patched.$day" >> "$GITHUB_OUTPUT"
+          {
+            echo "args=${args[*]}"
+            echo "repos=${repos[*]}"
+            echo "version=$up-patched.$day"
+          } >> "$GITHUB_OUTPUT"
 
       - id: index
         name: Tag the tested multi-arch index
@@ -215,13 +218,15 @@ jobs:
           VERSION: ${{ steps.tags.outputs.version }}
           BASE: ${{ needs.build.outputs.base }}
         run: |
+          refs=()                                    # digests/<hex>, one per architecture
+          for f in digests/*; do refs+=("$STAGING@sha256:${f##*/}"); done
           # shellcheck disable=SC2086  # ARGS is a list of -t flags
           docker buildx imagetools create $ARGS \
             --annotation "index:org.opencontainers.image.version=$VERSION" \
             --annotation "index:org.opencontainers.image.base.name=$BASE" \
             --annotation "index:org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
             --annotation "index:org.opencontainers.image.revision=$GITHUB_SHA" \
-            $(printf "$STAGING@sha256:%s " $(ls digests))
+            "${refs[@]}"
           digest=$(docker buildx imagetools inspect "$STAGING:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "### Published \`$VERSION\`: \`$digest\`" >> "$GITHUB_STEP_SUMMARY"

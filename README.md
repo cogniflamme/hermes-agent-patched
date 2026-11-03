@@ -8,7 +8,7 @@ shipped yet. Same entrypoint, same volumes, same behaviour; use it exactly like
 `nousresearch/hermes-agent`. Not affiliated with or endorsed by Nous Research.
 
 ```bash
-docker pull ghcr.io/cogniflamme/hermes-agent-patched:v0.22.5-patched
+docker pull ghcr.io/cogniflamme/hermes-agent-patched:v0.22.6-patched
 # or docker.io/cogniflamme/hermes-agent-patched (same digest)
 ```
 
