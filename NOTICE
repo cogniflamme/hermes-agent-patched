@@ -1,0 +1,12 @@
+The published image is a derivative of the official Hermes Agent image
+(docker.io/nousresearch/hermes-agent), which carries its own license:
+
+  MIT License, Copyright (c) 2025 Nous Research
+  (full text at /opt/hermes/LICENSE inside the image)
+
+It also contains Debian packages (including Chromium) and npm/PyPI packages,
+each under its own license; see /usr/share/doc/*/copyright and the SBOM
+attached to every published image.
+
+"Hermes" and "Nous Research" are used only to describe what this image is
+built from. This project is not affiliated with or endorsed by Nous Research.

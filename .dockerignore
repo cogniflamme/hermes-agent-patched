@@ -1,0 +1,7 @@
+.git
+.github
+scan.json
+*.tar
+tests
+ci
+*.md

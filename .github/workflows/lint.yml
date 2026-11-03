@@ -1,0 +1,46 @@
+# Static checks on the repo itself: workflows (actionlint, zizmor for
+# workflow security), shell (shellcheck), Containerfile (hadolint), Python.
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: actionlint (checksum-pinned release)
+        env:
+          V: 1.7.12
+          SHA: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          curl -fsSL -o al.tgz "https://github.com/rhysd/actionlint/releases/download/v$V/actionlint_${V}_linux_amd64.tar.gz"
+          echo "$SHA  al.tgz" | sha256sum -c -
+          tar xzf al.tgz actionlint && ./actionlint -color
+
+      - name: zizmor (workflow security)
+        run: pipx run zizmor==1.31.1 --persona=regular .github/workflows
+
+      - name: shellcheck
+        run: shellcheck tests/run.sh
+
+      - name: hadolint
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: Containerfile
+          config: .hadolint.yaml
+
+      - name: Python
+        run: |
+          python3 -m py_compile ci/gate.py ci/upstream.py tests/browser_e2e.py
+          python3 -c "import tomllib; tomllib.load(open('ci/accepted.toml','rb'))"

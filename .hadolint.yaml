@@ -1,0 +1,6 @@
+# DL3008 (pin apt versions): deliberately unpinned; the point of the image
+# is to take every Debian security fix at each build. The floor that matters
+# (libbrotli1) is asserted in the Containerfile and in tests/run.sh.
+# DL3006/DL3007: BASE and FETCH are ARGs pinned by digest.
+ignored: [DL3008, DL3006, DL3007]
+failure-threshold: warning

@@ -1,0 +1,264 @@
+# Build, test, scan, then publish: signed, with SBOM and provenance.
+#
+# Pull requests: build + test + gate per architecture, nothing pushed.
+# main / schedule / manual: each architecture is pushed to GHCR by digest
+# (untagged), pulled back and tested and gated; only when every architecture
+# passes does `publish` tag the multi-arch index on GHCR and Docker Hub, sign
+# it (cosign, keyless) and attest SBOM + build provenance.
+name: build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", ".github/dependabot.yml"]
+  pull_request:
+  schedule:
+    - cron: "17 4 * * 1"        # weekly: Debian security fixes, Chromium releases
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  STAGING: ghcr.io/${{ github.repository_owner }}/hermes-agent-hardened
+  # Docker Hub repository; publishing there is skipped until the
+  # DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets exist.
+  DOCKERHUB_REPO: ${{ vars.DOCKERHUB_REPO || 'cogniflamme/hermes-agent-hardened' }}
+
+jobs:
+  build:
+    name: build ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    permissions:
+      contents: read
+      packages: write          # push the untagged per-arch digest to GHCR
+    outputs:
+      base: ${{ steps.pin.outputs.base }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Free disk (the image is ~3.5 GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - id: pin
+        name: Upstream pin
+        run: |
+          base=$(sed -n 's/^BASE=//p' upstream.env)
+          [[ $base == docker.io/nousresearch/hermes-agent:v*@sha256:* ]] || { echo "bad pin: $base"; exit 1; }
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: build
+        name: Build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          pull: true
+          no-cache: ${{ github.event_name == 'schedule' }}   # weekly: fresh apt, nothing cached
+          build-args: BASE=${{ steps.pin.outputs.base }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.arch }},mode=max
+          # PR: load locally. Otherwise: push by digest, untagged, with buildx's
+          # SBOM and max provenance attached.
+          load: ${{ github.event_name == 'pull_request' }}
+          tags: ${{ github.event_name == 'pull_request' && 'hardened:test' || '' }}
+          outputs: ${{ github.event_name != 'pull_request' && format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.STAGING) || '' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
+
+      - name: Image under test
+        id: img
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          if [[ $GITHUB_EVENT_NAME == pull_request ]]; then
+            echo "ref=hardened:test" >> "$GITHUB_OUTPUT"
+          else
+            ref="$STAGING@$DIGEST"
+            docker pull -q --platform "linux/${{ matrix.arch }}" "$ref"   # test exactly what was pushed
+            echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test (versions, tools, boot, browser end to end)
+        env:
+          ENGINE: docker
+          IMG: ${{ steps.img.outputs.ref }}
+        run: tests/run.sh "$IMG"
+
+      - name: Scan (grype)
+        id: scan
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: ${{ steps.img.outputs.ref }}
+          fail-build: false              # ci/gate.py decides
+          output-format: json
+          output-file: grype-${{ matrix.arch }}.json
+
+      - name: Gate (KEV, fixable Critical/High, ci/accepted.toml)
+        env:
+          REPORT: grype-${{ matrix.arch }}.json
+        run: python3 ci/gate.py "$REPORT" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the scan report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: grype-${{ matrix.arch }}
+          path: grype-${{ matrix.arch }}.json
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Hand the digest to publish
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p digests && touch "digests/${DIGEST#sha256:}"
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digest-${{ matrix.arch }}
+          path: digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: release           # optional protection rules live here
+    permissions:
+      contents: read
+      packages: write              # tags on GHCR
+      id-token: write              # keyless signing (Sigstore) and attestations
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: hub
+        name: Log in to Docker Hub (if configured)
+        env:
+          HUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          HUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [[ -n $HUB_USER && -n $HUB_TOKEN ]]; then
+            printf '%s' "$HUB_TOKEN" | docker login docker.io -u "$HUB_USER" --password-stdin
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::DOCKERHUB_USERNAME/DOCKERHUB_TOKEN not set: publishing to GHCR only"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: tags
+        name: Tags
+        env:
+          BASE: ${{ needs.build.outputs.base }}
+          HUB_ON: ${{ steps.hub.outputs.enabled }}
+        run: |
+          up=${BASE%@*}; up=${up##*:}                       # v0.22.5
+          day=$(date -u +%Y%m%d)
+          repos=("ghcr.io/${{ github.repository_owner }}/hermes-agent-hardened")
+          [[ $HUB_ON == true ]] && repos+=("docker.io/$DOCKERHUB_REPO")
+          args=()
+          for r in "${repos[@]}"; do
+            args+=(-t "$r:$up-hardened.$day" -t "$r:$up-hardened" -t "$r:latest")
+          done
+          echo "args=${args[*]}" >> "$GITHUB_OUTPUT"
+          echo "repos=${repos[*]}" >> "$GITHUB_OUTPUT"
+          echo "version=$up-hardened.$day" >> "$GITHUB_OUTPUT"
+
+      - id: index
+        name: Tag the tested multi-arch index
+        env:
+          ARGS: ${{ steps.tags.outputs.args }}
+          VERSION: ${{ steps.tags.outputs.version }}
+          BASE: ${{ needs.build.outputs.base }}
+        run: |
+          # shellcheck disable=SC2086  # ARGS is a list of -t flags
+          docker buildx imagetools create $ARGS \
+            --annotation "index:org.opencontainers.image.version=$VERSION" \
+            --annotation "index:org.opencontainers.image.base.name=$BASE" \
+            --annotation "index:org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --annotation "index:org.opencontainers.image.revision=$GITHUB_SHA" \
+            $(printf "$STAGING@sha256:%s " $(ls digests))
+          digest=$(docker buildx imagetools inspect "$STAGING:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "### Published \`$VERSION\`: \`$digest\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Sign (cosign keyless; identity = this workflow)
+        env:
+          REPOS: ${{ steps.tags.outputs.repos }}
+          DIGEST: ${{ steps.index.outputs.digest }}
+        run: |
+          for r in $REPOS; do cosign sign --yes "$r@$DIGEST"; done
+
+      - name: SBOM of the published image (SPDX)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ env.STAGING }}@${{ steps.index.outputs.digest }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: true
+
+      - name: Attest the SBOM (cosign)
+        env:
+          REPOS: ${{ steps.tags.outputs.repos }}
+          DIGEST: ${{ steps.index.outputs.digest }}
+        run: |
+          for r in $REPOS; do cosign attest --yes --type spdxjson --predicate sbom.spdx.json "$r@$DIGEST"; done
+
+      - name: Build provenance (GitHub attestation, GHCR)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.STAGING }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          push-to-registry: true
+
+      - name: Build provenance (GitHub attestation, Docker Hub)
+        if: steps.hub.outputs.enabled == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: index.docker.io/${{ env.DOCKERHUB_REPO }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          push-to-registry: true

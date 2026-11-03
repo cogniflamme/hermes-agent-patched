@@ -1,0 +1,22 @@
+# Python packages upgraded in Hermes' venv. Pinned by hash (wheels for amd64 and
+# arm64, plus the sdist); installed with --no-deps --only-binary :all:.
+# brotlicffi: GHSA-9v8h-qqgm-4m35 (CISA KEV, Brotli decoder overflow)
+brotlicffi==1.2.1.0 \
+    --hash=sha256:0a7281a39de91432e90c27ab9c4f9feb3a9cf33fda3873534c2a88270d9f60a2 \
+    --hash=sha256:ed7c8311209853c9d78e2f6cff1f57e4df2541e4d67e3677dc1f4c88539db907 \
+    --hash=sha256:5d0b89e959f643aab4c58c15c06e1e87b6f6605e5e88c3c1c28f5ce1c58c4e5f
+# pyasn1: 8 High (upstream ships 0.6.4)
+pyasn1==0.6.5 \
+    --hash=sha256:4017b0fce125096b8573b39c989fdb1a4b19cf761e683398184550fea0e66587 \
+    --hash=sha256:6b11616a6bcf3a40e635f082bb232fa57b5e0dd7f517bd7ddd69ec3794508a47
+# tornado: 4 Medium, 2 Low (upstream ships 6.5.10)
+tornado==6.6 \
+    --hash=sha256:11bb97c00981eb8254e55bd6a5ad960c983ae343fef8ae3ae5584cd1fb70236a \
+    --hash=sha256:4e152a3b2d3eae113b836d979823f7bb2320f7e334a84449729964921f374a4c \
+    --hash=sha256:34c4aa916d7f2b2d5cadee2c6850f5a4a7f3d688cbf58399ea9bd3057af4abd5
+# pypdf: 7 High (GHSA-42gh-23hr-vphw, -4vqv-7265-gm2w, -5849-834g-hvw5,
+# -62m5-6wh8-28x7, -cggf-277g-3q54, -mfr5-77xh-9j7h, -x3rh-gjgm-fmqc);
+# Hermes v0.22.6 ships 6.21.2
+pypdf==6.21.4 \
+    --hash=sha256:33e4fb41ca352810eb4e9838aa0d82d6888a5f8bf682f43e99cce5faa666255c \
+    --hash=sha256:c8817e3f888d47a087872ded69812c1ef30cacb871d6e053e0c00bbaf0bc2163

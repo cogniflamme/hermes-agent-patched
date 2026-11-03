@@ -1,0 +1,64 @@
+# Daily: is there a newer stable Hermes image (past the 2-day cooldown)?
+# If so, open a pull request that moves upstream.env, and run the build on
+# it. The PR is reviewed and merged by a person; merging publishes.
+name: upstream
+
+on:
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write          # push the bump branch
+      pull-requests: write     # open the PR
+      actions: write           # start the build on it (PRs opened by GITHUB_TOKEN trigger nothing)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true    # pushes the bump branch below
+
+      - id: check
+        name: Newest stable upstream
+        run: |
+          set +e; python3 ci/upstream.py --check; rc=$?; set -e
+          case $rc in
+            0)  echo "due=true" >> "$GITHUB_OUTPUT" ;;
+            10) echo "due=false" >> "$GITHUB_OUTPUT" ;;
+            *)  exit "$rc" ;;
+          esac
+
+      - name: Open the bump PR and build it
+        if: steps.check.outputs.due == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          line=$(python3 ci/upstream.py)
+          tag=${line%@*}; tag=${tag##*:}
+          branch="upstream/$tag"
+          if git ls-remote --exit-code origin "refs/heads/$branch" >/dev/null; then
+            echo "branch $branch exists already"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          sed -i "s|^BASE=.*|$line|" upstream.env
+          git commit -am "upstream: Hermes $tag"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" --title "upstream: Hermes $tag" --body "$(cat <<BODY
+          New stable upstream image: \`${line#BASE=}\`
+
+          Before merging:
+          - the \`build\` run on this branch passed (tests + gate on amd64 and arm64);
+          - read the [release notes](https://github.com/NousResearch/hermes-agent/releases/tag/$tag);
+          - drop any patch in the Containerfile/README that $tag fixes upstream
+            (the gate run shows what is still found without it).
+
+          Merging publishes \`$tag-hardened\`.
+          BODY
+          )"
+          gh workflow run build.yml --ref "$branch"

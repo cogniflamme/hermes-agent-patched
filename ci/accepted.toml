@@ -1,0 +1,21 @@
+# Findings the release gate (ci/gate.py) lets through. Each one needs a
+# reason and an expiry date; after that date the gate fails again, so every
+# exception is reviewed rather than forgotten. Match: id + package (+ version).
+
+[[accepted]]
+id = "CVE-2026-115557"
+package = "python"
+version = "3.14.9"
+reason = """Hermes' standalone interpreter (/opt/hermes/tools/python-3.14.9, pinned in
+its pm/lock.json). The fix in 3.14.10 adds a denylist of known-compromised CA
+certificates to ssl; no code-execution path. Replacing the interpreter under
+Hermes' venv is riskier than the finding; wait for upstream's next pin."""
+expires = 2026-12-15
+
+[[accepted]]
+id = "GHSA-4pqm-j46f-795x"
+package = "hermes-agent"
+version = "0.0.0"
+reason = """False positive: the image's dist-info says 0.0.0, but this is Hermes
+v0.22.5; the advisory was fixed in 0.16.0."""
+expires = 2027-06-01

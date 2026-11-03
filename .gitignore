@@ -1,0 +1,3 @@
+scan.json
+*.tar
+__pycache__/
