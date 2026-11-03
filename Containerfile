@@ -5,7 +5,8 @@
 # dropped once an upstream release carries the fix. BASE is the upstream image
 # pinned by digest (upstream.env).
 ARG BASE
-ARG FETCH=docker.io/library/debian:trixie-slim@sha256:1e1a22175fbf1b32157ddaf0219e1db4e5401fab2b94ed285add64d18587cd2d
+# The multi-arch INDEX digest (not a per-architecture one): arm64 builds need it.
+ARG FETCH=docker.io/library/debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 
 # ---- fetch: downloads and signature checks, so the image gains no curl/gpg.
 FROM ${FETCH} AS fetch
