@@ -74,10 +74,13 @@ cosign verify ghcr.io/cogniflamme/hermes-agent-patched@sha256:<digest> \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github.com/cogniflamme/hermes-agent-patched/\.github/workflows/build\.yml@refs/heads/main$'
 
-# Build provenance (SLSA) and SBOM
+# Build provenance (SLSA), signed by GitHub
 gh attestation verify oci://ghcr.io/cogniflamme/hermes-agent-patched@sha256:<digest> \
   --repo cogniflamme/hermes-agent-patched
-cosign verify-attestation --type spdxjson ... (same identity flags as above)
+
+# SBOM (SPDX, per architecture), stored with the image by BuildKit
+docker buildx imagetools inspect ghcr.io/cogniflamme/hermes-agent-patched:latest \
+  --format '{{ json .SBOM }}'
 ```
 
 ## How it is built
@@ -94,8 +97,9 @@ cosign verify-attestation --type spdxjson ... (same identity flags as above)
   and an expiry date.
 - **Only if every architecture passes** does `publish` tag the multi-arch
   index (`vX.Y.Z-patched.YYYYMMDD`, `vX.Y.Z-patched`, `latest`), sign it
-  with cosign (keyless, Sigstore) and attach an SPDX SBOM and SLSA build
-  provenance.
+  with cosign (keyless, Sigstore) and attest SLSA build provenance. Each
+  architecture also carries BuildKit's SPDX SBOM and provenance, and the
+  run keeps the full SBOM as a downloadable artifact.
 - **Upstream releases**: a daily job opens a PR moving `upstream.env` to the
   newest stable Hermes once it is 2 days old, and builds it. A person merges.
 - **Repo hygiene**: actions pinned by commit SHA (Dependabot keeps them

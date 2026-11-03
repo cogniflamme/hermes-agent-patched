@@ -4,7 +4,7 @@
 # main / schedule / manual: each architecture is pushed to GHCR by digest
 # (untagged), pulled back and tested and gated; only when every architecture
 # passes does `publish` tag the multi-arch index on GHCR and Docker Hub, sign
-# it (cosign, keyless) and attest SBOM + build provenance.
+# it (cosign, keyless) and attest build provenance (SBOM: in the image).
 name: build
 
 on:
@@ -240,6 +240,9 @@ jobs:
           retry() { for i in 1 2 3; do "$@" && return 0; [[ $i -lt 3 ]] && sleep $((i * 30)); done; return 1; }
           for r in $REPOS; do retry cosign sign --yes "$r@$DIGEST"; done
 
+      # Downloadable from the run (Artifacts). Not signed into Sigstore: at ~25 MB
+      # it is far beyond what the public log (Rekor) accepts; the image already
+      # carries BuildKit's SBOM and provenance in its attestation manifests.
       - name: SBOM of the published image (SPDX)
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
@@ -247,15 +250,6 @@ jobs:
           format: spdx-json
           output-file: sbom.spdx.json
           upload-artifact: true
-
-      - name: Attest the SBOM (cosign)
-        env:
-          REPOS: ${{ steps.tags.outputs.repos }}
-          DIGEST: ${{ steps.index.outputs.digest }}
-        run: |
-          # Sigstore's public log (Rekor) has short outages: 3 tries, 30 s then 60 s apart.
-          retry() { for i in 1 2 3; do "$@" && return 0; [[ $i -lt 3 ]] && sleep $((i * 30)); done; return 1; }
-          for r in $REPOS; do retry cosign attest --yes --type spdxjson --predicate sbom.spdx.json "$r@$DIGEST"; done
 
       - name: Build provenance (GitHub attestation, GHCR)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
