@@ -28,10 +28,11 @@ except ImportError:
     ce = None
 p = ce(allow_override=False) if ce else None
 print(\"hermes resolves chromium:\", p)
-assert p is None or os.path.realpath(p).startswith(\"/usr/lib/chromium\") or os.path.realpath(p) == \"/usr/bin/chromium\", p")
+assert p is None or os.path.realpath(p) in (os.path.realpath(\"/usr/bin/chromium\"), \"/usr/bin/chromium\") \
+    or os.path.realpath(p).startswith(\"/usr/lib/chromium\"), p")
   /opt/hermes/.venv/bin/python -c "
 import importlib.metadata as m, brotlicffi
-need = {\"brotlicffi\": (1,2,1,0), \"pyasn1\": (0,6,5), \"tornado\": (6,6), \"pypdf\": (6,21,4)}
+need = {\"brotlicffi\": (1,2,1,0), \"pyasn1\": (0,6,5), \"tornado\": (6,6), \"pypdf\": (6,21,4), \"oauthlib\": (4,0,1)}
 for p, v in list(need.items()):
     try:
         have = tuple(int(x) for x in m.version(p).split(\".\"))
@@ -40,7 +41,19 @@ for p, v in list(need.items()):
     assert have >= v, f\"{p} {have} < {v}\"
 d = b\"x\" * 4096; assert brotlicffi.decompress(brotlicffi.compress(d)) == d
 print(\"python ok:\", {p: m.version(p) for p in need})"
-  chromium --version
+  # Chromium: at least the release that fixes the newest exploited bug we
+  # know of (CVE-2026-125350, CISA KEV: 157.0.8103.50); from Debian or Chrome
+  # for Testing (Containerfile 2a), and never both.
+  v=$(chromium --version | grep -oE "[0-9]+(\.[0-9]+){3}"); echo "chromium $v"
+  dpkg --compare-versions "$v" ge 157.0.8103.50
+  if [ -d /opt/chrome-for-testing ]; then
+    test "$(readlink -f /usr/bin/chromium)" = /opt/chrome-for-testing/chrome/chrome
+    ! dpkg -s chromium >/dev/null 2>&1 && ! dpkg -s chromium-common >/dev/null 2>&1
+    test "$v" = "$(cat /opt/chrome-for-testing/VERSION)"
+    [ -z "$(find / -xdev -iname "*widevine*" 2>/dev/null)" ]   # stripped (NOTICE)
+  else
+    dpkg -s chromium >/dev/null
+  fi
   hermes --version | sed -n 1p' && pass "patched versions" || fail "patched versions"
 
 echo "== tools"

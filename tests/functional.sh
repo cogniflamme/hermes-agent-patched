@@ -121,7 +121,7 @@ asyncio.run(main())"
 check "telegram library imports" $PY -c "import telegram, telegram.ext"
 
 echo "-- chromium: what Hermes runs"
-check "Hermes resolves Debian's Chromium" sh -c "cd /opt/hermes && p=\$($PY -c 'from hermes_cli.browser_runtime import chromium_executable as c; print(c())') && readlink -f \"\$p\" | grep -qE '^/usr/(bin/chromium|lib/chromium/)'"
+check "Hermes resolves the patched Chromium" sh -c "cd /opt/hermes && p=\$($PY -c 'from hermes_cli.browser_runtime import chromium_executable as c; print(c())') && readlink -f \"\$p\" | grep -qE '^(/usr/(bin/chromium|lib/chromium/)|/opt/chrome-for-testing/chrome/chrome$)'"
 check "renders example.com" retry sh -c "timeout 60 chromium --headless --no-sandbox --disable-gpu --dump-dom https://example.com 2>/dev/null | grep -q 'Example Domain'"
 check "renders en.wikipedia.org (br)" retry sh -c "timeout 60 chromium --headless --no-sandbox --disable-gpu --dump-dom https://en.wikipedia.org/wiki/Brotli 2>/dev/null | grep -qi compression"
 

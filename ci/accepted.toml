@@ -19,3 +19,12 @@ version = "0.0.0"
 reason = """False positive: the image's dist-info says 0.0.0, but this is Hermes
 v0.22.5; the advisory was fixed in 0.16.0."""
 expires = 2027-06-01
+
+[[accepted]]
+id = "CVE-2026-123158"
+package = "openssh-client"
+version = "1:10.0p1-7+deb13u4"
+reason = """Not applicable: the flaw is in sshd on musl libc without PAM (NVD names
+Alpine). This image is Debian glibc 2.41 and ships only the ssh client, no
+sshd. On CISA's KEV list, hence the gate; grype rates it Negligible."""
+expires = 2026-12-31

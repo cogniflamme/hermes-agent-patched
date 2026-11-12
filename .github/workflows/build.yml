@@ -59,6 +59,10 @@ jobs:
           base=$(sed -n 's/^BASE=//p' upstream.env)
           [[ $base == docker.io/nousresearch/hermes-agent:v*@sha256:* ]] || { echo "bad pin: $base"; exit 1; }
           echo "base=$base" >> "$GITHUB_OUTPUT"
+          # Chrome for Testing pin (chrome.env): version + per-arch sha256, as build args
+          grep -qE '^CFT_VERSION=[0-9]+(\.[0-9]+){3}$' chrome.env || { echo "bad CFT_VERSION"; exit 1; }
+          [[ $(grep -cE '^CFT_SHA256_(AMD64|ARM64)=[0-9a-f]{64}$' chrome.env) == 2 ]] || { echo "bad CFT sha256"; exit 1; }
+          { echo "cft<<EOF"; grep -E '^CFT_' chrome.env; echo "EOF"; } >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -79,7 +83,9 @@ jobs:
           platforms: linux/${{ matrix.arch }}
           pull: true
           no-cache: ${{ github.event_name == 'schedule' }}   # weekly: fresh apt, nothing cached
-          build-args: BASE=${{ steps.pin.outputs.base }}
+          build-args: |
+            BASE=${{ steps.pin.outputs.base }}
+            ${{ steps.pin.outputs.cft }}
           cache-from: type=gha,scope=${{ matrix.arch }}
           cache-to: type=gha,scope=${{ matrix.arch }},mode=max
           # PR: load locally. Otherwise: push by digest, untagged, with buildx's

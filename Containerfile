@@ -17,7 +17,7 @@ ARG DOCKER_KEY_FPR=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
 ARG NPM_VERSION=12.2.1
 ARG NPM_SHA256=228bd64aaef23270dbdbd2cf3d5ef5c467602ef38c4066246cef1984adab9a67
 RUN apt-get update -qq \
- && apt-get install -y -qq --no-install-recommends ca-certificates curl gnupg >/dev/null
+ && apt-get install -y -qq --no-install-recommends ca-certificates curl gnupg unzip >/dev/null
 RUN curl -fsSL https://download.docker.com/linux/debian/gpg -o /docker.asc \
  && gpg --show-keys --with-colons /docker.asc | grep -qx "fpr:::::::::${DOCKER_KEY_FPR}:" \
  && gpg --dearmor -o /docker.gpg /docker.asc
@@ -29,6 +29,27 @@ RUN curl -fsSL -o /npm.tgz "https://registry.npmjs.org/npm/-/npm-${NPM_VERSION}.
  && echo "${NPM_SHA256}  /npm.tgz" | sha256sum -c - \
  && curl -fsSL -o /undici.tgz "https://registry.npmjs.org/undici/-/undici-${UNDICI_VERSION}.tgz" \
  && echo "${UNDICI_SHA256}  /undici.tgz" | sha256sum -c -
+# Chrome for Testing (chrome.env), by sha256 for this architecture. Used by
+# step 2 only while it is newer than Debian's Chromium. Widevine (Google's
+# proprietary DRM module, nothing an agent needs) is removed here, before it
+# reaches any image layer; so is the setuid sandbox helper Hermes never uses.
+ARG TARGETARCH
+ARG CFT_VERSION
+ARG CFT_SHA256_AMD64
+ARG CFT_SHA256_ARM64
+RUN case "${TARGETARCH}" in \
+      amd64) plat=linux64 sum=${CFT_SHA256_AMD64} ;; \
+      arm64) plat=linux-arm64 sum=${CFT_SHA256_ARM64} ;; \
+      *) echo "no Chrome for Testing for ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+ && [ -n "${CFT_VERSION}" ] && [ -n "$sum" ] \
+ && curl -fsSL --retry 3 -o /cft.zip \
+      "https://storage.googleapis.com/chrome-for-testing-public/${CFT_VERSION}/${plat}/chrome-${plat}.zip" \
+ && echo "$sum  /cft.zip" | sha256sum -c - \
+ && mkdir /cft && unzip -q /cft.zip -d /cft && mv "/cft/chrome-${plat}" /cft/chrome \
+ && rm -rf /cft/chrome/WidevineCdm /cft/chrome/chrome_sandbox \
+ && [ -z "$(find /cft -iname '*widevine*')" ] \
+ && printf '%s' "${CFT_VERSION}" > /cft/VERSION && rm /cft.zip
 
 # ---- the image
 FROM ${BASE}
@@ -40,18 +61,43 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # 1. Debian: every security fix in trixie-security (e.g. libbrotli1
 #    1.1.0-2+deb13u1, CVE-2026-111497, CISA KEV), plus Debian's Chromium,
-#    which follows Chrome stable security releases.
+#    which follows Chrome stable security releases (sometimes days behind:
+#    step 2 then swaps in Chrome for Testing and keeps only its libraries).
 RUN apt-get update -qq \
  && apt-get upgrade -y -qq \
  && apt-get install -y -qq --no-install-recommends chromium fonts-liberation \
  && apt-get clean && rm -rf /var/lib/apt/lists/* \
  && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libbrotli1)" ge 1.1.0-2+deb13u1
 
-# 2. Chrome: Hermes bundles Chrome for Testing 145.0.7632.6 (pinned in its
+# 2a. The newer Chromium wins. Debian's when it has caught up; else Chrome
+#    for Testing (chrome.env), e.g. 157.0.8103.78 on 2026-11-12 while Debian
+#    had 156.0.8078.79 (CVE-2026-125350, CISA KEV, fixed in 157.0.8103.50).
+#    Debian's package is then purged but every library it pulled in stays
+#    (marked manual), which is also what Chrome's deb.deps lists, so no
+#    vulnerable chromium package is left for scanners or for anyone to run.
+#    Either way /usr/bin/chromium is the browser.
+COPY --from=fetch /cft /opt/chrome-for-testing
+RUN deb=$(dpkg-query -W -f='${Version}' chromium) \
+ && cft=$(cat /opt/chrome-for-testing/VERSION) \
+ && if dpkg --compare-versions "${deb%%-*}" ge "$cft"; then \
+      echo "Chromium: Debian ${deb} (>= Chrome for Testing ${cft})"; \
+      rm -rf /opt/chrome-for-testing; \
+    else \
+      echo "Chromium: Chrome for Testing ${cft} (Debian has ${deb})"; \
+      deps=$(apt-cache depends --installed --no-recommends --no-suggests chromium chromium-common \
+             | awk '/^ *(Pre)?Depends:/ {print $2}' | grep -v '^<' | grep -vx 'chromium-common' | sort -u); \
+      apt-mark manual $deps >/dev/null; \
+      apt-get purge -y -qq chromium chromium-common >/dev/null; \
+      ln -s /opt/chrome-for-testing/chrome/chrome /usr/bin/chromium; \
+    fi \
+ && /usr/bin/chromium --version \
+ && [ -z "$(cd /opt/chrome-for-testing/chrome 2>/dev/null && ldd chrome | grep 'not found')" ]
+
+# 2b. Chrome: Hermes bundles Chrome for Testing 145.0.7632.6 (pinned in its
 #    pm/lock.json up to v0.22.6 at least; four CISA KEV remote code execution
 #    bugs, ~1,700 findings, and Hermes runs it with --no-sandbox in
 #    containers). Each bundled chrome/chromium binary becomes a link to
-#    Debian's Chromium, so every way a Hermes version resolves its browser
+#    /usr/bin/chromium (2a), so every way a Hermes version resolves its browser
 #    (pm's record, the baked path files, AGENT_BROWSER_EXECUTABLE_PATH) lands
 #    on the patched one: v0.22.5 reads agent-browser-executable-path, v0.22.6
 #    chromium-executable-path; both are written.

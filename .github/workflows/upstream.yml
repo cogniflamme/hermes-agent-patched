@@ -62,3 +62,56 @@ jobs:
           BODY
           )"
           gh workflow run build.yml --ref "$branch"
+
+  # Daily too: a newer Chrome for Testing stable than chrome.env (Chrome
+  # stable releases are security releases). Same flow: a PR, built on both
+  # architectures; a person merges, merging publishes.
+  chrome:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+
+      - id: check
+        name: Newest Chrome for Testing stable
+        run: |
+          set +e; python3 ci/chrome.py --check; rc=$?; set -e
+          case $rc in
+            0)  echo "due=true" >> "$GITHUB_OUTPUT" ;;
+            10) echo "due=false" >> "$GITHUB_OUTPUT" ;;
+            *)  exit "$rc" ;;
+          esac
+
+      - name: Open the bump PR and build it
+        if: steps.check.outputs.due == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 ci/chrome.py > chrome.env.new && mv chrome.env.new chrome.env
+          v=$(sed -n 's/^CFT_VERSION=//p' chrome.env)
+          branch="chrome/$v"
+          if git ls-remote --exit-code origin "refs/heads/$branch" >/dev/null; then
+            echo "branch $branch exists already"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "chrome: Chrome for Testing $v"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" --title "chrome: Chrome for Testing $v" --body "$(cat <<BODY
+          Newer Chrome for Testing stable: \`$v\` (sha256 per architecture in chrome.env).
+
+          Before merging:
+          - the \`build\` run on this branch passed (tests + gate on amd64 and arm64);
+          - the [Chrome releases blog](https://chromereleases.googleblog.com/) lists $v as a stable update.
+
+          The build uses it only while it is newer than Debian's Chromium.
+          Merging publishes a new \`-patched\` image.
+          BODY
+          )"
+          gh workflow run build.yml --ref "$branch"

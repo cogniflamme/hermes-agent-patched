@@ -4,9 +4,28 @@ The published image is a derivative of the official Hermes Agent image
   MIT License, Copyright (c) 2025 Nous Research
   (full text at /opt/hermes/LICENSE inside the image)
 
-It also contains Debian packages (including Chromium) and npm/PyPI packages,
-each under its own license; see /usr/share/doc/*/copyright and the SBOM
-attached to every published image.
+It also contains Debian packages and npm/PyPI packages, each under its own
+license; see /usr/share/doc/*/copyright and the SBOM attached to every
+published image.
+
+The browser is Debian's Chromium when Debian has the newest security release,
+otherwise Google's Chrome for Testing (chrome.env, in /opt/chrome-for-testing):
+
+  Chrome for Testing, Copyright Google LLC. Made possible by the Chromium
+  open source project and other open source software (chrome://credits).
+  Use is subject to Google's terms: https://www.google.com/chrome/terms/
+  (also chrome://terms inside the browser).
+
+Chrome for Testing is Google's build of Chrome for automated testing and
+browser automation, which is what Hermes uses it for. It is downloaded from
+Google's own storage (storage.googleapis.com/chrome-for-testing-public) and
+checked against the sha256 in chrome.env; nothing in it is modified except
+that Widevine (Google's proprietary DRM module) and the setuid sandbox helper
+are removed. Hermes Agent's upstream image already ships Chrome for Testing
+(an older release); this image only moves it to a current one. "Chrome" and
+"Google" are used only to describe what is included; this project is not
+affiliated with or endorsed by Google. If you are a rights holder and object
+to this distribution, open an issue and it will be removed.
 
 "Hermes" and "Nous Research" are used only to describe what this image is
 built from. This project is not affiliated with or endorsed by Nous Research.

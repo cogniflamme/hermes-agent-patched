@@ -22,8 +22,8 @@ carries the fix.
 | # | Change | Why |
 |---|---|---|
 | 1 | `apt-get upgrade` from Debian trixie-security | every Debian security fix at build time, e.g. `libbrotli1` 1.1.0-2+deb13u1 (CVE-2026-111497, **CISA KEV**, Brotli decoder overflow) |
-| 2 | Bundled Chrome for Testing **145.0.7632.6** → Debian's **Chromium 156** | the bundled Chrome (pinned in Hermes' `pm/lock.json`) has ~1,700 known vulnerabilities, four of them **exploited in the wild** (CVE-2026-2441, -87491, -11645, -85046). Hermes starts it with `--no-sandbox` inside containers, so a malicious page reaches the container. The bundled binaries become links to `/usr/bin/chromium`, and both path files Hermes reads point there |
-| 3 | Python, pinned by hash: `brotlicffi` 1.2.1.0, `pyasn1` 0.6.5, `tornado` 6.6, `pypdf` 6.21.4 | GHSA-9v8h-qqgm-4m35 (**KEV**), 8 High (pyasn1), 7 High (pypdf, v0.22.6), tornado Medium. Only packages the Hermes release ships are touched |
+| 2 | Bundled Chrome for Testing **145.0.7632.6** → the **newest patched Chromium**: Debian's when it has caught up, else Google's Chrome for Testing pinned in `chrome.env` (**157.0.8103.78** on 2026-11-12, Widevine removed; see NOTICE) | the bundled Chrome (pinned in Hermes' `pm/lock.json`) has ~1,700 known vulnerabilities, four of them **exploited in the wild** (CVE-2026-2441, -87491, -11645, -85046); Debian's Chromium 156 still had CVE-2026-125350 (**CISA KEV**, fixed in 157.0.8103.50). Hermes starts the browser with `--no-sandbox` inside containers, so a malicious page reaches the container. The bundled binaries become links to `/usr/bin/chromium`, and both path files Hermes reads point there; `ci/chrome.py` (daily, in `upstream.yml`) opens the PR when Google publishes a newer stable |
+| 3 | Python, pinned by hash: `brotlicffi` 1.2.1.0, `pyasn1` 0.6.5, `tornado` 6.6, `pypdf` 6.21.4, `oauthlib` 4.0.1 | GHSA-9v8h-qqgm-4m35 (**KEV**), 8 High (pyasn1), 7 High (pypdf, v0.22.6), tornado Medium, GHSA-3jp2-3mrg-2vxc High (oauthlib, v0.22.6). Only packages the Hermes release ships are touched |
 | 4 | Debian's `docker-cli` 26.1.5 → Docker's `docker-ce-cli` (signed repository) | Debian's build uses Go 1.24.4: 3 Critical, 33 High in the Go standard library |
 | 5 | npm 12.0.2 → 12.2.1 (both bundled copies), its `undici` → 6.29.1 | undici (TLS certificate validation bypass, DoS), ip-address, brace-expansion, tar, postcss-selector-parser |
 | 6 | Photon platform sidecar: `undici` 7.30.1, `zod` 4.6.6 | 4 High, 1 High |
@@ -40,8 +40,8 @@ Nothing else: no configuration, entrypoint or code changes in Hermes.
 
 What remains has no fix anywhere yet: mostly Debian packages Debian marks
 "won't fix" or "not fixed yet" (curl, libxml2, the system Python 3.13 that
-Hermes does not use) and Chromium releases Debian has not packaged yet. The
-weekly rebuild takes them as they land.
+Hermes does not use) and nothing from Chromium while Chrome for Testing
+bridges Debian's delay. The weekly rebuild takes Debian's fixes as they land.
 
 ## Patched, not hardened
 
@@ -118,6 +118,6 @@ has or has already fixed.
 ## License
 
 The scripts and Containerfile here: MIT (LICENSE). The image contains Hermes
-Agent (MIT, © Nous Research), Debian packages and Chromium under their own
-licenses; see NOTICE. The banner (`assets/banner.png`) carries the Cogniflamme
+Agent (MIT, © Nous Research), Debian packages, and Debian's Chromium or Google's
+Chrome for Testing (Google's terms), each under its own license; see NOTICE. The banner (`assets/banner.png`) carries the Cogniflamme
 Labs logo and is not covered by the MIT license: please do not reuse it.
