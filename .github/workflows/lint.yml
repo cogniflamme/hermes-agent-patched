@@ -42,5 +42,5 @@ jobs:
 
       - name: Python
         run: |
-          python3 -m py_compile ci/gate.py ci/upstream.py tests/browser_e2e.py
+          python3 -m py_compile ci/gate.py ci/upstream.py ci/chrome.py tests/browser_e2e.py
           python3 -c "import tomllib; tomllib.load(open('ci/accepted.toml','rb'))"

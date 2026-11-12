@@ -91,7 +91,8 @@ RUN deb=$(dpkg-query -W -f='${Version}' chromium) \
       ln -s /opt/chrome-for-testing/chrome/chrome /usr/bin/chromium; \
     fi \
  && /usr/bin/chromium --version \
- && [ -z "$(cd /opt/chrome-for-testing/chrome 2>/dev/null && ldd chrome | grep 'not found')" ]
+ && { [ ! -d /opt/chrome-for-testing ] \
+      || [ -z "$(ldd /opt/chrome-for-testing/chrome/chrome | grep 'not found')" ]; }
 
 # 2b. Chrome: Hermes bundles Chrome for Testing 145.0.7632.6 (pinned in its
 #    pm/lock.json up to v0.22.6 at least; four CISA KEV remote code execution
