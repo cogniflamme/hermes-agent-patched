@@ -1,7 +1,7 @@
 #!/bin/sh
 # tests/functional.sh: the code paths that use the updated packages, exercised
 # the way Hermes uses them. Runs INSIDE the image (tests/run.sh mounts it at
-# /t), in a throwaway dir. Network: httpbin.org, example.com, wikipedia.org,
+# /t), in a throwaway dir. Network: httpbin.org, example.com,
 # registry.npmjs.org (retried; CI runners have egress).
 #
 #   pypdf      Hermes' PDF skill scripts: merge, split/rotate, watermark,
@@ -9,7 +9,8 @@
 #   brotli     brotli-encoded responses through httpx and urllib3
 #   pyasn1     google-auth: PKCS#8 key decoding, RSA sign/verify
 #   tornado    HTTP server + client (python-telegram-bot's webhook stack)
-#   chromium   the binary Hermes resolves, rendering real sites
+#   chromium   the binary Hermes resolves, rendering a real site and a local
+#              brotli-encoded page
 #   npm/undici registry query, npx running a package; docker CLI
 set -u
 PY=/opt/hermes/.venv/bin/python
@@ -122,8 +123,30 @@ check "telegram library imports" $PY -c "import telegram, telegram.ext"
 
 echo "-- chromium: what Hermes runs"
 check "Hermes resolves the patched Chromium" sh -c "cd /opt/hermes && p=\$($PY -c 'from hermes_cli.browser_runtime import chromium_executable as c; print(c())') && readlink -f \"\$p\" | grep -qE '^(/usr/(bin/chromium|lib/chromium/)|/opt/chrome-for-testing/chrome/chrome$)'"
-check "renders example.com" retry sh -c "timeout 60 chromium --headless --no-sandbox --disable-gpu --dump-dom https://example.com 2>/dev/null | grep -q 'Example Domain'"
-check "renders en.wikipedia.org (br)" retry sh -c "timeout 60 chromium --headless --no-sandbox --disable-gpu --dump-dom https://en.wikipedia.org/wiki/Brotli 2>/dev/null | grep -qi compression"
+render() {  # render URL TEXT: the DOM must contain TEXT; on failure show what came back
+  dom=$(timeout 60 chromium --headless --no-sandbox --disable-gpu --dump-dom "$1" 2>"$W/chrome.err")
+  echo "$dom" | grep -qi "$2" && return 0
+  echo "DOM: $(echo "$dom" | tr -s ' \n' ' ' | cut -c1-300)"; tail -3 "$W/chrome.err"; return 1
+}
+check "renders example.com" retry render https://example.com 'Example Domain'
+# a brotli-encoded page from a local server: Chromium's br decoding, without a
+# public site's bot filter (Wikipedia answered CI's datacenter IPs differently)
+$PY - > "$W/br.port" 2>"$W/br.log" <<'PY' &
+import brotlicffi, http.server
+body = brotlicffi.compress(b"<html><body><p id=t>brotli decoded by chromium</p></body></html>")
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200); self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Encoding", "br"); self.send_header("Content-Length", str(len(body)))
+        self.end_headers(); self.wfile.write(body)
+    def log_message(self, *a): pass
+s = http.server.HTTPServer(("127.0.0.1", 0), H)
+print(s.server_address[1], flush=True); s.serve_forever()
+PY
+brpid=$!
+for i in 1 2 3 4 5 6 7 8 9 10; do [ -s "$W/br.port" ] && break; sleep 0.5; done
+check "renders a brotli-encoded page" render "http://127.0.0.1:$(cat "$W/br.port")/" "brotli decoded by chromium"
+kill "$brpid" 2>/dev/null
 
 echo "-- node toolchain + docker CLI"
 check "npm registry query" retry npm view left-pad version --cache "$W/npmc"
