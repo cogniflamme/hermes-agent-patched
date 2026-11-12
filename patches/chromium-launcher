@@ -1,0 +1,12 @@
+#!/bin/sh
+# /usr/bin/chromium when the image carries Chrome for Testing (Containerfile
+# 2a). Debian's launcher, which this replaces, adds --disable-dev-shm-usage
+# when /dev/shm has less than 3.8 GB: containers get 64 MB by default
+# (Docker), and Chrome then crashes on larger pages. Same rule here, plus the
+# two quiet-by-default flags Debian sets. Everything else Hermes passes itself.
+shm=$(df -Pk /dev/shm 2>/dev/null | awk 'NR == 2 { print $4 }')
+set -- --no-default-browser-check --disable-pings "$@"
+if [ -z "$shm" ] || [ "$shm" -lt 3984589 ]; then
+  set -- --disable-dev-shm-usage "$@"
+fi
+exec /opt/chrome-for-testing/chrome/chrome "$@"

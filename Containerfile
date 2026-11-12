@@ -75,8 +75,12 @@ RUN apt-get update -qq \
 #    Debian's package is then purged but every library it pulled in stays
 #    (marked manual), which is also what Chrome's deb.deps lists, so no
 #    vulnerable chromium package is left for scanners or for anyone to run.
-#    Either way /usr/bin/chromium is the browser.
+#    Either way /usr/bin/chromium is the browser. For Chrome for Testing it is
+#    a small launcher (patches/chromium-launcher) keeping what Debian's
+#    launcher does that matters in a container: --disable-dev-shm-usage when
+#    /dev/shm is small (Docker's default is 64 MB; without it pages crash).
 COPY --from=fetch /cft /opt/chrome-for-testing
+COPY patches/chromium-launcher /opt/chrome-for-testing/chromium-launcher
 RUN deb=$(dpkg-query -W -f='${Version}' chromium) \
  && cft=$(cat /opt/chrome-for-testing/VERSION) \
  && if dpkg --compare-versions "${deb%%-*}" ge "$cft"; then \
@@ -88,7 +92,7 @@ RUN deb=$(dpkg-query -W -f='${Version}' chromium) \
              | awk '/^ *(Pre)?Depends:/ {print $2}' | grep -v '^<' | grep -vx 'chromium-common' | sort -u); \
       apt-mark manual $deps >/dev/null; \
       apt-get purge -y -qq chromium chromium-common >/dev/null; \
-      ln -s /opt/chrome-for-testing/chrome/chrome /usr/bin/chromium; \
+      cp /opt/chrome-for-testing/chromium-launcher /usr/bin/chromium; chmod 0755 /usr/bin/chromium; \
     fi \
  && /usr/bin/chromium --version \
  && { [ ! -d /opt/chrome-for-testing ] \

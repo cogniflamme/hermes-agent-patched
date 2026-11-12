@@ -47,7 +47,7 @@ print(\"python ok:\", {p: m.version(p) for p in need})"
   v=$(chromium --version | grep -oE "[0-9]+(\.[0-9]+){3}"); echo "chromium $v"
   dpkg --compare-versions "$v" ge 157.0.8103.50
   if [ -d /opt/chrome-for-testing ]; then
-    test "$(readlink -f /usr/bin/chromium)" = /opt/chrome-for-testing/chrome/chrome
+    grep -q "^exec /opt/chrome-for-testing/chrome/chrome " /usr/bin/chromium   # the launcher
     ! dpkg -s chromium >/dev/null 2>&1 && ! dpkg -s chromium-common >/dev/null 2>&1
     test "$v" = "$(cat /opt/chrome-for-testing/VERSION)"
     [ -z "$(find / -xdev -iname "*widevine*" 2>/dev/null)" ]   # stripped (NOTICE)
@@ -80,14 +80,14 @@ grep -qE "Chromium binary: /usr/bin/chromium" <<<"$log" && pass "stage2 uses /us
 grep -q "Hermes Agent v" <<<"$log" && pass "hermes starts through the entrypoint" || fail "no version through the entrypoint"
 
 echo "== browser end to end"
-podman run --rm -v "$T":/t:$VOL --entrypoint sh "$IMG" -c '
+podman run --rm --shm-size 64m -v "$T":/t:$VOL --entrypoint sh "$IMG" -c '
   export HERMES_HOME=/tmp/hh   # no override: Hermes resolves its browser itself, as in production
   mkdir -p /tmp/hh; (cd /t && exec python3 -m http.server 8765 --bind 127.0.0.1 >/dev/null 2>&1) &
   sleep 1; cd /opt/hermes; timeout 300 /opt/hermes/.venv/bin/python /t/browser_e2e.py' \
   && pass "browser tool" || fail "browser tool"
 
 echo "== functional (the code paths that use the updated packages)"
-podman run --rm -v "$T":/t:$VOL --entrypoint sh "$IMG" /t/functional.sh \
+podman run --rm --shm-size 64m -v "$T":/t:$VOL --entrypoint sh "$IMG" /t/functional.sh \
   && pass "PDF skill, brotli, google-auth, tornado, Chromium, npm" || fail "functional"
 
 exit $rc

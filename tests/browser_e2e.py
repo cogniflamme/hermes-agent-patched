@@ -57,7 +57,8 @@ def check_chrome():
     ps = subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True).stdout
     chromes = {line.split()[0] for line in ps.splitlines() if "--remote-debugging" in line or "--type=renderer" in line}
     # want may be a wrapper script (Debian: /usr/bin/chromium execs /usr/lib/chromium/chromium)
-    allowed = (os.path.dirname(os.path.realpath(want)), "/usr/lib/chromium/")
+    # or the Chrome for Testing launcher (/usr/bin/chromium execs /opt/chrome-for-testing/chrome/chrome)
+    allowed = (os.path.dirname(os.path.realpath(want)), "/usr/lib/chromium/", "/opt/chrome-for-testing/chrome/")
     real = {os.path.realpath(c) for c in chromes}
     check("runs the image's Chromium, not a bundled one",
           bool(real) and all(r.startswith(allowed) and not r.startswith("/opt/hermes/tools") for r in real),
